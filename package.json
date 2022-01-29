@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "express": "4.17.2"
+  },
+  "devDependencies": {
+    "dotenv": "^14.3.2"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  }
+}
