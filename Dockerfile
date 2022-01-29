@@ -5,4 +5,4 @@ COPY package.json ./
 RUN npm install && mv node_modules/ ../
 COPY . .
 
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]
