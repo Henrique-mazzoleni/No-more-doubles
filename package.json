@@ -1,11 +1,14 @@
 {
   "dependencies": {
-    "express": "4.17.2",
+    "express": "^4.17.2",
+    "request": "^2.88.2",
+    "cookie-parser":"^1.4.6",
+    "cors":"^2.8.5",
     "hbs": "^4.2.0"
   },
   "devDependencies": {
     "dotenv": "^14.3.2",
-    "nodemon":"^2.0.15"
+    "nodemon": "^2.0.15"
   },
   "scripts": {
     "start": "node src/app.js",
