@@ -5,7 +5,11 @@ const qs = require("qs");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const app = require("express")();
-const { generateRandomString, extractTracks } = require("./utils/utils");
+const {
+  generateRandomString,
+  extractTracks,
+  extractDoubles,
+} = require("./utils/utils");
 const hbs = require("hbs");
 
 const port = process.env.PORT || 8888;
@@ -39,7 +43,9 @@ app.get("", async (req, res) => {
         offset += 50;
         console.log(tracks.length);
       }
-      console.log(tracks.slice(2820));
+      const doubleTracks = extractDoubles(tracks);
+      console.log(doubleTracks);
+      console.log(doubleTracks.length);
     } catch (error) {
       console.log(error);
     }

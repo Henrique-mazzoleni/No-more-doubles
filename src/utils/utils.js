@@ -23,4 +23,19 @@ const extractTracks = (list) => {
   return res;
 };
 
-module.exports = { generateRandomString, extractTracks };
+const extractDoubles = (list) => {
+  list.sort((a, b) => {
+    if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
+  });
+  const doubles = list.filter((cur, i, arr) => {
+    return (
+      (cur.name.toLowerCase() === arr[i + 1]?.name.toLowerCase() &&
+        cur.artist.toLowerCase() === arr[i + 1]?.artist.toLowerCase()) ||
+      (cur.name.toLowerCase() === arr[i - 1]?.name.toLowerCase() &&
+        cur.artist.toLowerCase() === arr[i - 1]?.artist.toLowerCase())
+    );
+  });
+  return doubles;
+};
+
+module.exports = { generateRandomString, extractTracks, extractDoubles };
