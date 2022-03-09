@@ -22,38 +22,13 @@ const stateKey = process.env.STATE_KEY;
 app.set("view engine", "hbs").set("views", viewPath);
 app.use(cors()).use(cookieParser());
 
-app.get("", async (req, res) => {
-  if (req.query?.access_token) {
-    const access_token = req.query.access_token;
-    const options = {
-      headers: { Authorization: "Bearer " + access_token },
-    };
-
-    const tracks = [];
-    let offsetLimit = 1;
-    let offset = 0;
-    try {
-      while (offset < offsetLimit) {
-        const response = await axios.get(
-          `https://api.spotify.com/v1/me/tracks?offset=${offset}&limit=50`,
-          options
-        );
-        if (offsetLimit === 1) offsetLimit = response.data.total;
-        tracks.push(...extractTracks(response.data.items));
-        offset += 50;
-        console.log(tracks.length);
-      }
-      const doubleTracks = extractDoubles(tracks);
-      console.log(doubleTracks);
-      console.log(doubleTracks.length);
-    } catch (error) {
-      console.log(error);
-    }
-  }
+app.get("", (req, res) => {
+  if (req.cookies?.access_token) return res.redirect("home");
   res.render("index");
 });
 
 app.get("/login", (req, res) => {
+  res.clearCookie("access_token");
   const state = generateRandomString(16);
   res.cookie(stateKey, state);
   const scope =
@@ -103,21 +78,47 @@ app.get("/callback", async (req, res) => {
         config
       );
 
-      const access_token = response.data.access_token;
-      const refresh_token = response.data.refresh_token;
+      res.cookie("access_token", response.data.access_token);
+      res.cookie("refresh_token", response.data.refresh_token);
 
-      const accessParams = new URLSearchParams({
-        access_token: access_token,
-        refresh_token: refresh_token,
-      });
-
-      res.redirect("/?" + accessParams.toString());
+      res.redirect("/");
     } catch (error) {
       console.log(error);
     }
   }
 });
 
-app.listen(port, () => {
+app.get("/home", async (req, res) => {
+  const access_token = req.cookies.access_token;
+  const options = {
+    headers: { Authorization: "Bearer " + access_token },
+  };
+
+  const tracks = [];
+  let offsetLimit = 1;
+  let offset = 0;
+  try {
+    while (offset < offsetLimit) {
+      const response = await axios.get(
+        `https://api.spotify.com/v1/me/tracks?offset=${offset}&limit=50`,
+        options
+      );
+      // if (offsetLimit === 1) offsetLimit = response.data.total;
+      tracks.push(...extractTracks(response.data.items));
+      offset += 50;
+      console.log(tracks.length);
+    }
+    const doubleTracks = extractDoubles(tracks);
+    console.log(doubleTracks);
+    console.log(doubleTracks.length);
+  } catch (error) {
+    console.log(error);
+  }
+
+  res.render("home");
+});
+
+app.listen(port, (error) => {
+  if (error) console.log(error);
   console.log(`Server is up on port ${port}`);
 });
