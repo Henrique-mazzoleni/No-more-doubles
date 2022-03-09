@@ -89,6 +89,8 @@ app.get("/callback", async (req, res) => {
 });
 
 app.get("/home", async (req, res) => {
+  if (!req.cookies?.access_token) return res.redirect("/login");
+
   const access_token = req.cookies.access_token;
   const options = {
     headers: { Authorization: "Bearer " + access_token },
@@ -103,7 +105,7 @@ app.get("/home", async (req, res) => {
         `https://api.spotify.com/v1/me/tracks?offset=${offset}&limit=50`,
         options
       );
-      // if (offsetLimit === 1) offsetLimit = response.data.total;
+      if (offsetLimit === 1) offsetLimit = response.data.total;
       tracks.push(...extractTracks(response.data.items));
       offset += 50;
       console.log(tracks.length);
