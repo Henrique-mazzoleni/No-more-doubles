@@ -4,7 +4,7 @@ const axios = require("axios");
 const qs = require("qs");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
-const app = require("express")();
+const express = require("express");
 const {
   generateRandomString,
   extractTracks,
@@ -13,18 +13,26 @@ const {
 const hbs = require("hbs");
 
 const port = process.env.PORT || 8888;
-const viewPath = path.join(__dirname, "./templates/views");
+const viewPath = path.join(__dirname, "../templates/views");
+const partialsPath = path.join(__dirname, "../templates/partials");
+const publicDirectoryPath = path.join(__dirname, "../public");
+
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 const redirect_uri = process.env.REDIRECT_URI;
 const stateKey = process.env.STATE_KEY;
 
+const app = express();
 app.set("view engine", "hbs").set("views", viewPath);
+hbs.registerPartials(partialsPath);
+app.use(express.static(publicDirectoryPath));
 app.use(cors()).use(cookieParser());
 
 app.get("", (req, res) => {
   if (req.cookies?.access_token) return res.redirect("home");
-  res.render("index");
+  res.render("index", {
+    title: "No More Duplicates!",
+  });
 });
 
 app.get("/login", (req, res) => {
@@ -52,8 +60,8 @@ app.get("/callback", async (req, res) => {
   const storedState = req.cookies ? req.cookies[stateKey] : null;
 
   if (state === null || state !== storedState) {
-    const params = new URLSearchParams({ error: "state_missmatch" });
-    res.redirect("/?" + params.toString());
+    res.cookie("error", "state missmatch");
+    res.redirect("index");
   } else {
     res.clearCookie(stateKey);
     const data = qs.stringify({
@@ -81,7 +89,7 @@ app.get("/callback", async (req, res) => {
       res.cookie("access_token", response.data.access_token);
       res.cookie("refresh_token", response.data.refresh_token);
 
-      res.redirect("/");
+      res.redirect("home");
     } catch (error) {
       console.log(error);
     }
@@ -114,10 +122,13 @@ app.get("/home", async (req, res) => {
     console.log(doubleTracks);
     console.log(doubleTracks.length);
   } catch (error) {
-    console.log(error);
+    if (error.response.status === 401) res.redirect("/login");
+    console.log(error.response);
   }
 
-  res.render("home");
+  res.render("home", {
+    title: "No More Duplicates - Home",
+  });
 });
 
 app.listen(port, (error) => {
