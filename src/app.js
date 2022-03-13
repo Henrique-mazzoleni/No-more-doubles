@@ -22,6 +22,8 @@ const client_secret = process.env.CLIENT_SECRET;
 const redirect_uri = process.env.REDIRECT_URI;
 const stateKey = process.env.STATE_KEY;
 
+const tokenURL = "https://accounts.spotify.com/api/token";
+
 const app = express();
 app.set("view engine", "hbs").set("views", viewPath);
 hbs.registerPartials(partialsPath);
@@ -39,8 +41,7 @@ app.get("/login", (req, res) => {
   res.clearCookie("access_token");
   const state = generateRandomString(16);
   res.cookie(stateKey, state);
-  const scope =
-    "user-read-private user-read-email user-library-read playlist-read-private user-top-read";
+  const scope = "user-library-read";
   const auth_url = "https://accounts.spotify.com/authorize?";
   const searchParams = {
     client_id: client_id,
@@ -80,11 +81,7 @@ app.get("/callback", async (req, res) => {
       },
     };
     try {
-      const response = await axios.post(
-        "https://accounts.spotify.com/api/token",
-        data,
-        config
-      );
+      const response = await axios.post(tokenURL, data, config);
 
       res.cookie("access_token", response.data.access_token);
       res.cookie("refresh_token", response.data.refresh_token);
@@ -92,8 +89,36 @@ app.get("/callback", async (req, res) => {
       res.redirect("home");
     } catch (error) {
       console.log(error);
+      res.clearCookie(access_token);
+      res.clearCookie(refresh_token);
+      res.redirect("index");
     }
   }
+});
+
+app.get("/refresh", async (req, res) => {
+  const data = qs.stringify({
+    grant_type: "refresh_token",
+    refresh_token: req.cookies.refresh_token,
+  });
+  const config = {
+    headers: {
+      Authorization:
+        "Basic " +
+        Buffer.from(client_id + ":" + client_secret, "utf-8").toString(
+          "base64"
+        ),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  };
+
+  try {
+    const response = await axios.post(tokenURL, data, config);
+    res.cookie("access_token", response.data.access_token);
+  } catch (error) {
+    console.log(error);
+  }
+  res.redirect("home");
 });
 
 app.get("/home", async (req, res) => {
@@ -122,7 +147,7 @@ app.get("/home", async (req, res) => {
     console.log(doubleTracks);
     console.log(doubleTracks.length);
   } catch (error) {
-    if (error.response.status === 401) res.redirect("/login");
+    if (error.response.status === 401) return res.redirect("/refresh");
     console.log(error.response);
   }
 
