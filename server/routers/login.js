@@ -1,43 +1,27 @@
-require("dotenv").config();
-const path = require("path");
-const axios = require("axios");
-const qs = require("qs");
-const cookieParser = require("cookie-parser");
-const cors = require("cors");
 const express = require("express");
+const router = express.Router();
+
+const axios = require("axios").default;
+const qs = require("qs");
 const {
   generateRandomString,
   extractTracks,
   extractDoubles,
-} = require("./utils/utils");
-const hbs = require("hbs");
-
-const port = process.env.PORT || 8888;
-const viewPath = path.join(__dirname, "../templates/views");
-const partialsPath = path.join(__dirname, "../templates/partials");
-const publicDirectoryPath = path.join(__dirname, "../public");
+} = require("../utils/utils");
 
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 const redirect_uri = process.env.REDIRECT_URI;
 const stateKey = process.env.STATE_KEY;
+const base_url = process.env.BASE_URL;
+
+const externalAPI = axios.create();
+const internalAPI = axios.create();
+internalAPI.defaults.baseURL = base_url;
 
 const tokenURL = "https://accounts.spotify.com/api/token";
 
-const app = express();
-app.set("view engine", "hbs").set("views", viewPath);
-hbs.registerPartials(partialsPath);
-app.use(express.static(publicDirectoryPath));
-app.use(cors()).use(cookieParser());
-
-app.get("", (req, res) => {
-  if (req.cookies?.access_token) return res.redirect("home");
-  res.render("index", {
-    title: "No More Duplicates!",
-  });
-});
-
-app.get("/login", (req, res) => {
+router.get("/login", (req, res) => {
   res.clearCookie("access_token");
   const state = generateRandomString(16);
   res.cookie(stateKey, state);
@@ -55,14 +39,14 @@ app.get("/login", (req, res) => {
   res.redirect(auth_url + params.toString());
 });
 
-app.get("/callback", async (req, res) => {
+router.get("/callback", async (req, res) => {
   const code = req.query.code || null;
   const state = req.query.state || null;
   const storedState = req.cookies ? req.cookies[stateKey] : null;
 
   if (state === null || state !== storedState) {
     res.cookie("error", "state missmatch");
-    res.redirect("index");
+    return res.redirect("index");
   } else {
     res.clearCookie(stateKey);
     const data = qs.stringify({
@@ -81,7 +65,7 @@ app.get("/callback", async (req, res) => {
       },
     };
     try {
-      const response = await axios.post(tokenURL, data, config);
+      const response = await externalAPI.post(tokenURL, data, config);
 
       res.cookie("access_token", response.data.access_token);
       res.cookie("refresh_token", response.data.refresh_token);
@@ -91,12 +75,14 @@ app.get("/callback", async (req, res) => {
       console.log(error);
       res.clearCookie(access_token);
       res.clearCookie(refresh_token);
-      res.redirect("index");
+      res.redirect("/login");
     }
   }
 });
 
-app.get("/refresh", async (req, res) => {
+router.get("/refresh", async (req, res) => {
+  if (!req.cookies?.refresh_token) return res.redirect("/login");
+
   const data = qs.stringify({
     grant_type: "refresh_token",
     refresh_token: req.cookies.refresh_token,
@@ -113,42 +99,30 @@ app.get("/refresh", async (req, res) => {
   };
 
   try {
-    const response = await axios.post(tokenURL, data, config);
+    const response = await externalAPI.post(tokenURL, data, config);
     res.cookie("access_token", response.data.access_token);
   } catch (error) {
     console.log(error);
+    res.clearCookie(refresh_token);
+    return res.redirect("/login");
   }
   res.redirect("home");
 });
 
-app.get("/home", async (req, res) => {
+router.get("/home", async (req, res) => {
   if (!req.cookies?.access_token) return res.redirect("/login");
 
-  const access_token = req.cookies.access_token;
-  const options = {
-    headers: { Authorization: "Bearer " + access_token },
-  };
-
-  const tracks = [];
-  let offsetLimit = 1;
-  let offset = 0;
   try {
-    while (offset < offsetLimit) {
-      const response = await axios.get(
-        `https://api.spotify.com/v1/me/tracks?offset=${offset}&limit=50`,
-        options
-      );
-      if (offsetLimit === 1) offsetLimit = response.data.total;
-      tracks.push(...extractTracks(response.data.items));
-      offset += 50;
-      console.log(tracks.length);
-    }
-    const doubleTracks = extractDoubles(tracks);
-    console.log(doubleTracks);
-    console.log(doubleTracks.length);
+    const response = await internalAPI.get("/tracks", {
+      headers: { Authorization: "Bearer " + req.cookies.access_token },
+    });
+    console.log(response.data);
+    return res.render("home", {
+      title: "No More Duplicates - Home",
+    });
   } catch (error) {
+    console.log(error);
     if (error.response.status === 401) return res.redirect("/refresh");
-    console.log(error.response);
   }
 
   res.render("home", {
@@ -156,7 +130,31 @@ app.get("/home", async (req, res) => {
   });
 });
 
-app.listen(port, (error) => {
-  if (error) console.log(error);
-  console.log(`Server is up on port ${port}`);
+router.get("/tracks", async (req, res) => {
+  const options = {
+    headers: { Authorization: req.headers.authorization },
+  };
+
+  const tracks = [];
+  let offsetLimit = 1;
+  let offset = 0;
+  try {
+    while (offset < offsetLimit) {
+      const response = await externalAPI.get(
+        `https://api.spotify.com/v1/me/tracks?offset=${offset}&limit=50`,
+        options
+      );
+      if (offsetLimit === 1) offsetLimit = response.data.total;
+      tracks.push(...extractTracks(response.data.items));
+      offset += 50;
+    }
+    const doubleTracks = extractDoubles(tracks);
+    res.status(200).send(doubleTracks);
+  } catch (error) {
+    console.log(error.response);
+    if (error.response?.status === 401)
+      return res.status(401).send({ error: "Unauthorized" });
+  }
 });
+
+module.exports = router;
